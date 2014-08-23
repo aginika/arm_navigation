@@ -1,16 +1,16 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
-rosbuild_init()
+# Catkin User Guide: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/user_guide.html
+# Catkin CMake Standard: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/standards.html
+cmake_minimum_required(VERSION 2.8.3)
+project(collision_space)
+# Load catkin and all dependencies required for this package
+# TODO: remove all from COMPONENTS that are not catkin packages.
+find_package(catkin REQUIRED COMPONENTS rosconsole planning_models geometric_shapes)
+find_package(Boost REQUIRED COMPONENTS thread)
 
-set(ROS_BUILD_TYPE Release)
-
-rosbuild_add_boost_directories()
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 add_definitions(-DdDOUBLE)
-rosbuild_add_library(collision_space src/environment_objects.cpp
-				    src/environment.cpp
-				    src/environmentODE.cpp)
-target_link_libraries(collision_space ode)
-
+find_package(Bullet REQUIRED)
+find_package(ODE REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(ASSIMP QUIET)
 if (NOT ASSIMP_FOUND)
@@ -37,5 +37,22 @@ else()
   set(IS_ASSIMP3 0) # most likely not
 endif()
 
-rosbuild_add_gtest(test_collision_space test/test_collision_space.cpp)
-target_link_libraries(test_collision_space collision_space)
+
+
+include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${Bullet_INCLUDE_DIRS} ${ODE_INCLUDE_DIRS})
+
+catkin_package(
+    DEPENDS pkg-config bullet libode-dev
+    CATKIN_DEPENDS rosconsole planning_models geometric_shapes
+    INCLUDE_DIRS include
+    LIBRARIES collision_space
+)
+
+add_library(collision_space src/environment_objects.cpp
+				    src/environment.cpp
+#				    src/environmentODE.cpp
+)
+target_link_libraries(collision_space ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Bullet_LIBRARIES} ${ODE_LIBRARIES})
+
+catkin_add_gtest(test_collision_space test/test_collision_space.cpp)
+target_link_libraries(test_collision_space collision_space ${catkin_LIBRARIES})

@@ -63,7 +63,7 @@ public:
   struct NamespaceObjects
   {
     /** \brief An array of static shapes */
-    std::vector< shapes::StaticShape* > static_shape;
+    std::vector< shapes::Shape* > static_shape;
 	    
     /** \brief An array of shapes */
     std::vector< shapes::Shape* > shape;
@@ -82,7 +82,7 @@ public:
   NamespaceObjects& getObjects(const std::string &ns);
 	
   /** \brief Add a static object to the namespace. The user releases ownership of the object. */
-  void addObject(const std::string &ns, shapes::StaticShape *shape);
+  void addObject(const std::string &ns, shapes::Shape *shape);
 
   /** \brief Add an object to the namespace. The user releases ownership of the object. */
   void addObject(const std::string &ns, shapes::Shape *shape, const tf::Transform &pose);
@@ -90,8 +90,6 @@ public:
   /** \brief Remove object. Object equality is verified by comparing pointers. Ownership of the object is renounced upon. Returns true on success. */
   bool removeObject(const std::string &ns, const shapes::Shape *shape);
 	
-  /** \brief Remove object. Object equality is verified by comparing pointers. Ownership of the object is renounced upon. Returns true on success. */
-  bool removeObject(const std::string &ns, const shapes::StaticShape *shape);
 	
   /** \brief Clear the objects in a specific namespace. Memory is freed. */
   void clearObjects(const std::string &ns);

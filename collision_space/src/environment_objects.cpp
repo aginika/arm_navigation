@@ -59,7 +59,7 @@ collision_space::EnvironmentObjects::NamespaceObjects& collision_space::Environm
   return objects_[ns];
 }
 
-void collision_space::EnvironmentObjects::addObject(const std::string &ns, shapes::StaticShape *shape)
+void collision_space::EnvironmentObjects::addObject(const std::string &ns, shapes::Shape *shape)
 {
   objects_[ns].static_shape.push_back(shape);
 }
@@ -87,21 +87,21 @@ bool collision_space::EnvironmentObjects::removeObject(const std::string &ns, co
   return false;
 }
 
-bool collision_space::EnvironmentObjects::removeObject(const std::string &ns, const shapes::StaticShape *shape)
-{
-  std::map<std::string, NamespaceObjects>::iterator it = objects_.find(ns);
-  if (it != objects_.end())
-  { 
-    unsigned int n = it->second.static_shape.size();
-    for (unsigned int i = 0 ; i < n ; ++i)
-      if (it->second.static_shape[i] == shape)
-      {
-        it->second.static_shape.erase(it->second.static_shape.begin() + i);
-        return true;
-      }
-  }
-  return false;
-}
+// bool collision_space::EnvironmentObjects::removeObject(const std::string &ns, const shapes::Shape *shape)
+// {
+//   std::map<std::string, NamespaceObjects>::iterator it = objects_.find(ns);
+//   if (it != objects_.end())
+//   { 
+//     unsigned int n = it->second.static_shape.size();
+//     for (unsigned int i = 0 ; i < n ; ++i)
+//       if (it->second.static_shape[i] == shape)
+//       {
+//         it->second.static_shape.erase(it->second.static_shape.begin() + i);
+//         return true;
+//       }
+//   }
+//   return false;
+// }
 
 void collision_space::EnvironmentObjects::clearObjects(const std::string &ns)
 {
@@ -141,10 +141,10 @@ collision_space::EnvironmentObjects* collision_space::EnvironmentObjects::clone(
     NamespaceObjects &ns = c->objects_[it->first];
     unsigned int n = it->second.static_shape.size();
     for (unsigned int i = 0 ; i < n ; ++i)
-      ns.static_shape.push_back(shapes::cloneShape(it->second.static_shape[i]));
+      ns.static_shape.push_back(it->second.static_shape[i]->clone());
     n = it->second.shape.size();
     for (unsigned int i = 0 ; i < n ; ++i)
-      ns.shape.push_back(shapes::cloneShape(it->second.shape[i]));
+      ns.shape.push_back(it->second.shape[i]->clone());
     ns.shape_pose = it->second.shape_pose;
   }
   return c;

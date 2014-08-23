@@ -476,8 +476,8 @@ shapes::Shape* planning_models::KinematicModel::constructShape(const urdf::Geome
       const urdf::Mesh *mesh = dynamic_cast<const urdf::Mesh*>(geom);
       if (!mesh->filename.empty())
       {
-        tf::Vector3 scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
-        result = shapes::createMeshFromFilename(mesh->filename, &scale);
+        Eigen::Vector3d scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
+        result = shapes::createMeshFromResource(mesh->filename, scale);
       }   
     } 
     break;
@@ -1120,7 +1120,8 @@ planning_models::KinematicModel::LinkModel::LinkModel(const LinkModel* link_mode
   collision_origin_transform_(link_model->collision_origin_transform_)
 {
   if(link_model->shape_) {
-    shape_ = shapes::cloneShape(link_model->shape_);
+    // shape_ = shapes::cloneShape(link_model->shape_);
+    shape_ = (link_model->shape_)->clone();
   } else {
     shape_ = NULL;
   }
@@ -1128,7 +1129,7 @@ planning_models::KinematicModel::LinkModel::LinkModel(const LinkModel* link_mode
   {
     std::vector<shapes::Shape*> shapes;
     for(unsigned int j = 0; j < link_model->attached_body_models_[i]->getShapes().size(); j++) {
-      shapes.push_back(shapes::cloneShape(link_model->attached_body_models_[i]->getShapes()[j]));
+      shapes.push_back(link_model->attached_body_models_[i]->getShapes()[j]->clone());
     }
     AttachedBodyModel *ab = new AttachedBodyModel(this, 
                                                   link_model->attached_body_models_[i]->getName(),

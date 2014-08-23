@@ -1,15 +1,14 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
-rosbuild_init()
-
-set(ROS_BUILD_TYPE Release)
-
-rosbuild_add_library(planning_models src/kinematic_model.cpp src/kinematic_state.cpp)
-
+# Catkin User Guide: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/user_guide.html
+# Catkin CMake Standard: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/standards.html
+cmake_minimum_required(VERSION 2.8.3)
+project(planning_models)
+# Load catkin and all dependencies required for this package
+# TODO: remove all from COMPONENTS that are not catkin packages.
+find_package(catkin REQUIRED COMPONENTS urdf rosconsole geometric_shapes angles roslib)
 find_package(ASSIMP QUIET)
 find_package(Eigen REQUIRED)
 find_package(PkgConfig REQUIRED)
-include_directories(SYSTEM ${Eigen_INCLUDE_DIRS})
+
 if (NOT ASSIMP_FOUND)
   pkg_check_modules(ASSIMP assimp)
 endif()
@@ -34,12 +33,23 @@ else()
   set(IS_ASSIMP3 0) # most likely not
 endif()
 
-
-# Unit tests
-rosbuild_add_gtest(test_kinematic test/test_kinematic.cpp)
-target_link_libraries(test_kinematic planning_models
+include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
+catkin_package(
+    DEPENDS pkg-config
+    CATKIN_DEPENDS urdf rosconsole geometric_shapes angles roslib
+    INCLUDE_DIRS include
+    LIBRARIES planning_models
 )
 
-rosbuild_add_executable(test_kinematic_complicated test/test_kinematic_complicated.cpp)
-target_link_libraries(test_kinematic_complicated planning_models BulletCollision gtest)
+add_library(planning_models src/kinematic_model.cpp src/kinematic_state.cpp)
+target_link_libraries(planning_models planning_models ${catkin_LIBRARIES} ${Eigen_LIBRARIES}
+)
+
+# Unit tests
+catkin_add_gtest(test_kinematic test/test_kinematic.cpp)
+target_link_libraries(test_kinematic planning_models ${catkin_LIBRARIES}
+)
+
+add_executable(test_kinematic_complicated test/test_kinematic_complicated.cpp)
+target_link_libraries(test_kinematic_complicated planning_models BulletCollision gtest ${catkin_LIBRARIES})
 
