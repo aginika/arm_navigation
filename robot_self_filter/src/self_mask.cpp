@@ -31,10 +31,12 @@
 #include <urdf/model.h>
 #include <resource_retriever/retriever.h>
 #include <geometric_shapes/shape_operations.h>
+#include <geometric_shapes/body_operations.h>
 #include <ros/console.h>
 #include <algorithm>
 #include <sstream>
 #include <climits>
+#include <tf_conversions/tf_eigen.h>
 
 #if defined(IS_ASSIMP3)
 #include <assimp/scene.h>
@@ -96,8 +98,8 @@ namespace robot_self_filter
           const urdf::Mesh *mesh = dynamic_cast<const urdf::Mesh*>(geom);
           if (!mesh->filename.empty())
           {
-            tf::Vector3 scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
-            result = shapes::createMeshFromFilename(mesh->filename, &scale);
+            Eigen::Vector3d scale(mesh->scale.x, mesh->scale.y, mesh->scale.z);
+            result = shapes::createMeshFromResource(mesh->filename, scale);
           } else
             ROS_WARN("Empty mesh filename");
           break;
@@ -325,8 +327,10 @@ void robot_self_filter::SelfMask::assumeFrame(const std::string &frame_id, const
     }
     
     // set it for each body; we also include the offset specified in URDF
-    bodies_[i].body->setPose(transf * bodies_[i].constTransf);
-    bodies_[i].unscaledBody->setPose(transf * bodies_[i].constTransf);
+    Eigen::Affine3d converted_tf;
+    tf::transformTFToEigen(transf * bodies_[i].constTransf, converted_tf);
+    bodies_[i].body->setPose(converted_tf);
+    bodies_[i].unscaledBody->setPose(converted_tf);
   }
   
   computeBoundingSpheres();
@@ -346,11 +350,12 @@ void robot_self_filter::SelfMask::maskAuxContainment(const pcl::PointCloud<pcl::
     //#pragma omp parallel for schedule(dynamic) 
     for (int i = 0 ; i < (int)np ; ++i)
     {
-      tf::Vector3 pt = tf::Vector3(data_in.points[i].x, data_in.points[i].y, data_in.points[i].z);
+      Eigen::Vector3d pt_eigen = Eigen::Vector3d(data_in.points[i].x, data_in.points[i].y, data_in.points[i].z);
       int out = OUTSIDE;
-      if (bound.center.distance2(pt) < radiusSquared)
+      Eigen::Vector3d diff = pt_eigen - bound.center;
+      if (diff.squaredNorm() < radiusSquared)
           for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-        if (bodies_[j].body->containsPoint(pt))
+        if (bodies_[j].body->containsPoint(pt_eigen))
             out = INSIDE;
       
       mask[i] = out;
@@ -376,13 +381,15 @@ void robot_self_filter::SelfMask::maskAuxIntersection(const pcl::PointCloud<pcl:
     bool print = false;
     //if(i%100 == 0) print = true;
     tf::Vector3 pt = tf::Vector3(data_in.points[i].x, data_in.points[i].y, data_in.points[i].z);
+    Eigen::Vector3d pt_eigen = Eigen::Vector3d(data_in.points[i].x, data_in.points[i].y, data_in.points[i].z);
     int out = OUTSIDE;
 
     // we first check is the point is in the unscaled body. 
     // if it is, the point is definitely inside
-    if (bound.center.distance2(pt) < radiusSquared)
+    Eigen::Vector3d diff = bound.center - pt_eigen;
+    if ( diff.squaredNorm() < radiusSquared)
       for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-        if (bodies_[j].unscaledBody->containsPoint(pt)) 
+        if (bodies_[j].unscaledBody->containsPoint(pt_eigen)) 
         {
           if(print)
           std::cout << "Point " << i << " in unscaled body part " << bodies_[j].name << std::endl;
@@ -393,7 +400,10 @@ void robot_self_filter::SelfMask::maskAuxIntersection(const pcl::PointCloud<pcl:
         if (out == OUTSIDE)
         {
           // we check it the point is a shadow point 
+          Eigen::Vector3d sensor_pos_eigen;
+          tf::vectorTFToEigen(sensor_pos_, sensor_pos_eigen);
           tf::Vector3 dir(sensor_pos_ - pt);
+          Eigen::Vector3d dir_eigen(sensor_pos_eigen - pt_eigen);
           tfScalar  lng = dir.length();
           if (lng < min_sensor_dist_) 
           {
@@ -403,24 +413,27 @@ void robot_self_filter::SelfMask::maskAuxIntersection(const pcl::PointCloud<pcl:
           else
           {		
             dir /= lng;
-            std::vector<tf::Vector3> intersections;
+            std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > intersections;
             for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j) 
             {
-              if (bodies_[j].body->intersectsRay(pt, dir, &intersections, 1))
+              if (bodies_[j].body->intersectsRay(pt_eigen, dir_eigen, &intersections, 1))
               {
-                if (dir.dot(sensor_pos_ - intersections[0]) >= 0.0)
+                tf::Vector3 tmp_tf_vec;
+                tf::vectorEigenToTF(intersections[0], tmp_tf_vec);
+                if (dir.dot(sensor_pos_ - tmp_tf_vec) >= 0.0)
                 {
                   if (callback)
-                    callback(intersections[0]);
+                    callback(tmp_tf_vec);
                   out = SHADOW;
                   if(print) std::cout << "Point " << i << " shadowed by body part " << bodies_[j].name << std::endl;
                 }
              }
 		       }
            // if it is not a shadow point, we check if it is inside the scaled body
-           if (out == OUTSIDE && bound.center.distance2(pt) < radiusSquared)
+            Eigen::Vector3d diff = bound.center - pt_eigen;
+            if (out == OUTSIDE && diff.squaredNorm() < radiusSquared)
              for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-               if (bodies_[j].body->containsPoint(pt)) 
+               if (bodies_[j].body->containsPoint(pt_eigen)) 
                {
                  if(print) 
                    std::cout << "Point " << i << " in scaled body part " << bodies_[j].name << std::endl;
@@ -436,8 +449,10 @@ int robot_self_filter::SelfMask::getMaskContainment(const tf::Vector3 &pt) const
 {
   const unsigned int bs = bodies_.size();
   int out = OUTSIDE;
+  Eigen::Vector3d pt_eigen;
+  tf::vectorTFToEigen(pt, pt_eigen);
   for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-    if (bodies_[j].body->containsPoint(pt))
+    if (bodies_[j].body->containsPoint(pt_eigen))
 	    out = INSIDE;
   return out;
 }
@@ -454,14 +469,18 @@ int robot_self_filter::SelfMask::getMaskIntersection(const tf::Vector3 &pt, cons
   // we first check is the point is in the unscaled body. 
   // if it is, the point is definitely inside
   int out = OUTSIDE;
+  Eigen::Vector3d pt_eigen;
+  tf::vectorTFToEigen(pt, pt_eigen);
   for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-    if (bodies_[j].unscaledBody->containsPoint(pt))
+    if (bodies_[j].unscaledBody->containsPoint(pt_eigen))
       out = INSIDE;
   
   if (out == OUTSIDE)
   {
     // we check it the point is a shadow point 
     tf::Vector3 dir(sensor_pos_ - pt);
+    Eigen::Vector3d dir_eigen;
+    tf::vectorTFToEigen(dir, dir_eigen);
     tfScalar  lng = dir.length();
     if (lng < min_sensor_dist_)
         out = INSIDE;
@@ -469,21 +488,24 @@ int robot_self_filter::SelfMask::getMaskIntersection(const tf::Vector3 &pt, cons
     {
       dir /= lng;
       
-      std::vector<tf::Vector3> intersections;
+      std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > intersections;
       for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-        if (bodies_[j].body->intersectsRay(pt, dir, &intersections, 1))
+        if (bodies_[j].body->intersectsRay(pt_eigen, dir_eigen, &intersections, 1))
         {
-          if (dir.dot(sensor_pos_ - intersections[0]) >= 0.0)
+          tf::Vector3 tmp_tf_vec;
+          tf::vectorEigenToTF(intersections[0], tmp_tf_vec);
+
+          if (dir.dot(sensor_pos_ - tmp_tf_vec) >= 0.0)
           {
             if (callback)
-              callback(intersections[0]);
+              callback(tmp_tf_vec);
             out = SHADOW;
           }
         }
         
         // if it is not a shadow point, we check if it is inside the scaled body
         for (unsigned int j = 0 ; out == OUTSIDE && j < bs ; ++j)
-          if (bodies_[j].body->containsPoint(pt))
+          if (bodies_[j].body->containsPoint(pt_eigen))
             out = INSIDE;
     }
   }

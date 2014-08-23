@@ -1,24 +1,24 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+# Catkin User Guide: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/user_guide.html
+# Catkin CMake Standard: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/standards.html
+cmake_minimum_required(VERSION 2.8.3)
+project(robot_self_filter)
+# Load catkin and all dependencies required for this package
+# TODO: remove all from COMPONENTS that are not catkin packages.
+find_package(catkin REQUIRED COMPONENTS roscpp tf tf_conversions filters sensor_msgs visualization_msgs geometric_shapes urdf resource_retriever pcl_conversions shape_msgs)
 
-# Set the build type.  Options are:
-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
-#  Debug          : w/ debug symbols, w/o optimization
-#  Release        : w/o debug symbols, w/ optimization
-#  RelWithDebInfo : w/ debug symbols, w/ optimization
-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 find_package(Eigen REQUIRED)
 find_package(PCL REQUIRED)
-include_directories(SYSTEM ${EIGEN_INCLUDE_DIRS}
-                           ${PCL_INCLUDE_DIRS}
-)
+find_package(Boost REQUIRED COMPONENTS signals)
+find_package(OpenMP REQUIRED)
 
-set(ROS_BUILD_TYPE Release)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_package(PCL)
-include_directories(SYSTEM ${PCL_INCLUDE_DIRS})
+include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} ${OpenMP_INCLUDE_DIRS})
+
+#generate_messages(
+#    #TODO DEPENDENCIES geometry_msgs std_msgs
+#)
+
 find_package(PkgConfig REQUIRED)
 find_package(ASSIMP QUIET)
 if (NOT ASSIMP_FOUND)
@@ -45,26 +45,43 @@ else()
   set(IS_ASSIMP3 0) # most likely not
 endif()
 
-rosbuild_init()
 
-rosbuild_add_boost_directories()
+# catkin_package parameters: http://ros.org/doc/groovy/api/catkin/html/dev_guide/generated_cmake_api.html#catkin-package
+# TODO: fill in what other packages will need to use this package
+catkin_package(
+    DEPENDS pcl assimp pkg-config
+    CATKIN_DEPENDS roscpp tf tf_conversions filters sensor_msgs visualization_msgs geometric_shapes urdf resource_retriever pcl_conversions shape_msgs
+    INCLUDE_DIRS include
+    LIBRARIES robot_self_filter
+)
 
-rosbuild_add_library(robot_self_filter src/self_mask.cpp)
-rosbuild_add_openmp_flags(robot_self_filter)
+
+add_library(robot_self_filter src/self_mask.cpp)
+#add_openmp_flags(robot_self_filter)
 target_link_libraries(robot_self_filter assimp
                                         geometric_shapes
                                         ${PCL_LIBRARIES}
+                                        ${catkin_LIBRARIES}
+                                        ${Boost_LIBRARIES}
+                                        ${OpenMP_LIBRARIES}
 )
 
-rosbuild_add_executable (test_filter src/test_filter.cpp)
-rosbuild_add_openmp_flags (test_filter)
-target_link_libraries (test_filter robot_self_filter assimp)
+add_executable (test_filter src/test_filter.cpp)
+#add_openmp_flags (test_filter)
+target_link_libraries (test_filter robot_self_filter
+  assimp
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${OpenMP_LIBRARIES}
+)
 
-rosbuild_add_executable(self_filter src/self_filter.cpp)
-rosbuild_add_openmp_flags(self_filter)
+add_executable(self_filter src/self_filter.cpp)
+#add_openmp_flags(self_filter)
 target_link_libraries(self_filter assimp
                                   geometric_shapes
                                   robot_self_filter
 				  BulletCollision BulletDynamics BulletSoftBody BulletMultiThreaded
+ ${catkin_LIBRARIES}
+ ${Boost_LIBRARIES}
+                                        ${OpenMP_LIBRARIES}
 )
-rosbuild_link_boost(self_filter signals)
