@@ -59,7 +59,6 @@ catkin_package(
 add_library(robot_self_filter src/self_mask.cpp)
 #add_openmp_flags(robot_self_filter)
 target_link_libraries(robot_self_filter assimp
-                                        geometric_shapes
                                         ${PCL_LIBRARIES}
                                         ${catkin_LIBRARIES}
                                         ${Boost_LIBRARIES}
@@ -78,7 +77,6 @@ target_link_libraries (test_filter robot_self_filter
 add_executable(self_filter src/self_filter.cpp)
 #add_openmp_flags(self_filter)
 target_link_libraries(self_filter assimp
-                                  geometric_shapes
                                   robot_self_filter
 				  BulletCollision BulletDynamics BulletSoftBody BulletMultiThreaded
  ${catkin_LIBRARIES}

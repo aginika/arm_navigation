@@ -127,7 +127,8 @@ public:
 
   void addStaticObject(const std::string& name,
                        std::vector<shapes::Shape*>& shapes,
-                       const std::vector<tf::Transform>& poses,
+                       const std::vector<tf::Transform> poses,
+                       const std::vector<Eigen::Affine3d , Eigen::aligned_allocator<Eigen::Affine3d> >& poses_eigen,
                        double padding);
 
   void deleteStaticObject(const std::string& name);

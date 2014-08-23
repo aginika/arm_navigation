@@ -39,6 +39,7 @@
 #include <robot_self_filter/self_mask.h>
 #include <pcl_ros/transforms.h>
 #include <angles/angles.h>
+#include <tf_conversions/tf_eigen.h>
 
 bool planning_environment::getLatestIdentityTransform(const std::string& to_frame,
                                                       const std::string& from_frame,
@@ -112,6 +113,9 @@ bool planning_environment::processCollisionObjectMsg(const arm_navigation_msgs::
   if (collision_object->operation.operation == arm_navigation_msgs::CollisionObjectOperation::ADD) {
     std::vector<shapes::Shape*> shapes;
     std::vector<tf::Transform> poses;
+    std::vector<Eigen::Affine3d,  Eigen::aligned_allocator<Eigen::Affine3d> > poses_eigen;
+
+
     bool shapes_ok = createAndPoseShapes(tf,
                                          collision_object->shapes,
                                          collision_object->poses,
@@ -119,6 +123,13 @@ bool planning_environment::processCollisionObjectMsg(const arm_navigation_msgs::
                                          cm->getWorldFrameId(),
                                          shapes,
                                          poses);
+
+    for (int i = 0; i < poses.size(); i++){
+      Eigen::Affine3d tmp_eigen;
+      tf::transformTFToEigen(poses[i], tmp_eigen);
+      poses_eigen.push_back(tmp_eigen);
+    }
+
     if(!shapes_ok) {
       ROS_INFO_STREAM("Not adding attached object " << collision_object->id 
                       << " to collision space because something's wrong with the shapes");
@@ -133,6 +144,7 @@ bool planning_environment::processCollisionObjectMsg(const arm_navigation_msgs::
       cm->addStaticObject(collision_object->id,
                           shapes,
                           poses,
+                          poses_eigen,
                           padding);
       ROS_INFO("Added %u object to namespace %s in collision space", (unsigned int)shapes.size(),collision_object->id.c_str()); 
     } 
@@ -285,16 +297,27 @@ int planning_environment::computeAttachedObjectPointMask(const planning_environm
     for(std::map<std::string, bodies::BodyVector*>::const_iterator it2 = it->second.begin();
         it2 != it->second.end();
         it2++) {
-      for(unsigned int k = 0; k < it2->second->getSize(); k++) {
+      for(unsigned int k = 0; k < it2->second->getCount(); k++) {
         //ROS_INFO_STREAM("Sphere distance " << it2->second->getBoundingSphere(k).center.distance2(pt)
         //                << " squared " << it2->second->getBoundingSphereRadiusSquared(k));
-        if(it2->second->getPaddedBoundingSphere(k).center.distance2(pt) < it2->second->getPaddedBoundingSphereRadiusSquared(k)) {
-          if(it2->second->getPaddedBody(k)->containsPoint(pt)) {
+        const bodies::Body* tmp_body = it2->second->getBody(k);
+        bodies::BoundingSphere bounding_sphere;
+        tmp_body->computeBoundingSphere(bounding_sphere);
+        Eigen::Vector3d pt_eigen;
+        tf::vectorTFToEigen(pt, pt_eigen);
+        Eigen::Vector3d sphere_center_diff = bounding_sphere.center - pt_eigen;
+        float distance2 = sphere_center_diff.norm();
+        float squared_radius = bounding_sphere.radius * bounding_sphere.radius;
+
+        if(distance2 < squared_radius) {
+          if(tmp_body->containsPoint(pt_eigen)) {
 	    cm->bodiesUnlock();
 	    return robot_self_filter::INSIDE;
 	  }
         }
-        if(it2->second->getPaddedBody(k)->intersectsRay(pt, dir)) {
+        Eigen::Vector3d dir_eigen;
+        tf::vectorTFToEigen(dir, dir_eigen);
+        if(tmp_body->intersectsRay(pt_eigen, dir_eigen)) {
           cm->bodiesUnlock();
           return robot_self_filter::SHADOW;
         }

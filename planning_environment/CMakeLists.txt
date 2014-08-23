@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(planning_environment)
-find_package(catkin REQUIRED COMPONENTS roscpp rosconsole rosbag actionlib_msgs actionlib tf std_srvs message_filters angles geometric_shapes sensor_msgs arm_navigation_msgs visualization_msgs planning_models collision_space pcl_ros robot_self_filter rviz)
+find_package(catkin REQUIRED COMPONENTS roscpp rosconsole rosbag actionlib_msgs actionlib tf tf_conversions std_srvs message_filters angles geometric_shapes sensor_msgs arm_navigation_msgs visualization_msgs planning_models collision_space pcl_ros robot_self_filter rviz)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 find_package(Eigen REQUIRED)
@@ -41,42 +41,40 @@ else()
   set(IS_ASSIMP3 0) # most likely not
 endif()
 
-
 include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${CMAKE_BINARY_DIR} ${QT_INCLUDE_DIR} ${OpenMP_INCLUDE_DIRS})
-
 
 catkin_package(
     DEPENDS libqt4-dev tinyxml pkg-config yaml-cpp
-    CATKIN_DEPENDS roscpp rosconsole rosbag actionlib_msgs actionlib tf std_srvs message_filters angles geometric_shapes sensor_msgs arm_navigation_msgs visualization_msgs planning_models collision_space pcl_ros robot_self_filter rviz
+    CATKIN_DEPENDS roscpp rosconsole rosbag actionlib_msgs actionlib tf tf_conversions std_srvs message_filters angles sensor_msgs arm_navigation_msgs visualization_msgs planning_models collision_space pcl_ros robot_self_filter rviz
     INCLUDE_DIRS include
     LIBRARIES planning_environment
 )
 
 add_library(planning_environment src/models/robot_models.cpp
-					 src/models/collision_models.cpp
-					 src/models/collision_models_interface.cpp
-					 src/monitors/kinematic_model_state_monitor.cpp
-					 src/monitors/collision_space_monitor.cpp
-					 src/monitors/planning_monitor.cpp
-					 src/util/kinematic_state_constraint_evaluator.cpp
-					 src/util/construct_object.cpp
-					 src/util/collision_operations_generator.cpp
-					 src/models/model_utils.cpp
-					 src/monitors/monitor_utils.cpp
-				         src/monitors/joint_state_monitor.cpp)
-
+                                 src/models/collision_models.cpp
+				 src/models/collision_models_interface.cpp
+				 src/monitors/kinematic_model_state_monitor.cpp
+				 src/monitors/collision_space_monitor.cpp
+				 src/monitors/planning_monitor.cpp
+				 src/util/kinematic_state_constraint_evaluator.cpp
+				 src/util/construct_object.cpp
+				 src/util/collision_operations_generator.cpp
+				 src/models/model_utils.cpp
+				 src/monitors/monitor_utils.cpp
+				 src/monitors/joint_state_monitor.cpp)
 target_link_libraries(planning_environment yaml-cpp ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenMP_LIBRARIES})
+
 add_executable(environment_server src/monitors/environment_server.cpp)
-target_link_libraries(environment_server planning_environment)
+target_link_libraries(environment_server planning_environment  ${catkin_LIBRARIES})
 
 add_executable(planning_scene_validity_server src/monitors/planning_scene_validity_server.cpp)
-target_link_libraries(planning_scene_validity_server planning_environment)
+target_link_libraries(planning_scene_validity_server planning_environment ${catkin_LIBRARIES})
 
 add_executable(visualize_all_collisions test/visualize_all_collisions.cpp)
 target_link_libraries(visualize_all_collisions planning_environment ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 add_executable(visualize_collision_models test/visualize_collision_models.cpp)
-target_link_libraries(visualize_collision_models planning_environment)
+target_link_libraries(visualize_collision_models planning_environment  ${catkin_LIBRARIES})
 
 add_executable(visualize_planning_scene test/visualize_planning_scene.cpp)
 target_link_libraries(visualize_planning_scene planning_environment ${catkin_LIBRARIES} ${Boost_LIBRARIES})
@@ -94,6 +92,24 @@ target_link_libraries(planning_description_configuration_wizard planning_environ
 add_executable(default_joint_state_publisher test/default_joint_state_publisher.cpp)
 target_link_libraries(default_joint_state_publisher planning_environment ${catkin_LIBRARIES})
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##############TEST E###################################
 # add_executable(test_robot_models test/test_robot_models.cpp) 
 # add_dependencies(tests test_robot_models)
 # add_gtest_build_flags(test_robot_models)

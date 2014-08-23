@@ -1,26 +1,78 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+# Catkin User Guide: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/user_guide.html
+# Catkin CMake Standard: http://www.ros.org/doc/groovy/api/catkin/html/user_guide/standards.html
+cmake_minimum_required(VERSION 2.8.3)
+project(arm_navigation_msgs)
+# Load catkin and all dependencies required for this package
+# TODO: remove all from COMPONENTS that are not catkin packages.
+find_package(catkin REQUIRED COMPONENTS std_msgs actionlib_msgs sensor_msgs geometry_msgs trajectory_msgs tf message_generation)
 
-# Set the build type.  Options are:
-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
-#  Debug          : w/ debug symbols, w/o optimization
-#  Release        : w/o debug symbols, w/ optimization
-#  RelWithDebInfo : w/ debug symbols, w/ optimization
-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-#set(ROS_BUILD_TYPE RelWithDebInfo)
 
-rosbuild_find_ros_package(actionlib_msgs)
-include(${actionlib_msgs_PACKAGE_PATH}/cmake/actionbuild.cmake)
-genaction()
+add_message_files(
+  FILES
+  AllowedCollisionEntry.msg
+  AllowedCollisionMatrix.msg
+  AllowedContactSpecification.msg
+  ArmNavigationErrorCodes.msg
+  AttachedCollisionObject.msg
+  CollisionMap.msg
+  CollisionObject.msg
+  CollisionObjectOperation.msg
+  CollisionOperation.msg
+  Constraints.msg
+  ContactInformation.msg
+  DisplayTrajectory.msg
+  JointConstraint.msg
+  JointLimits.msg
+  JointTrajectoryWithLimits.msg
+  LinkPadding.msg
+  MotionPlanRequest.msg
+  MoveArmStatistics.msg
+  MultiDOFJointState.msg
+  MultiDOFJointTrajectory.msg
+  MultiDOFJointTrajectoryPoint.msg
+  OrderedCollisionOperations.msg
+  OrientationConstraint.msg
+  OrientedBoundingBox.msg
+  PlanningScene.msg
+  PositionConstraint.msg
+  RobotState.msg
+  RobotTrajectory.msg
+  Shape.msg
+  SimplePoseConstraint.msg
+  VisibilityConstraint.msg
+  WorkspaceParameters.msg
+)
 
-rosbuild_init()
+add_service_files(
+  FILES
+  FilterJointTrajectory.srv
+  FilterJointTrajectoryWithConstraints.srv
+  GetCollisionObjects.srv
+  GetJointTrajectoryValidity.srv
+  GetMotionPlan.srv
+  GetPlanningScene.srv
+  GetRobotState.srv
+  GetRobotTrajectoryValidity.srv
+  GetStateValidity.srv
+  SetPlanningSceneDiff.srv
+)
 
-#set the default path for built executables to the "bin" directory
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-#set the default path for built libraries to the "lib" directory
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+add_action_files(
+  FILES
+  MakeStaticCollisionMap.action
+  MoveArm.action
+  SyncPlanningScene.action
+)
 
-#uncomment if you have defined messages
-rosbuild_genmsg()
-#uncomment if you have defined services
-rosbuild_gensrv()
+generate_messages(
+  DEPENDENCIES geometry_msgs std_msgs actionlib_msgs sensor_msgs trajectory_msgs
+)
+
+# catkin_package parameters: http://ros.org/doc/groovy/api/catkin/html/dev_guide/generated_cmake_api.html#catkin-package
+# TODO: fill in what other packages will need to use this package
+catkin_package(
+    DEPENDS
+    CATKIN_DEPENDS std_msgs actionlib_msgs sensor_msgs geometry_msgs trajectory_msgs tf message_runtime
+    INCLUDE_DIRS # TODO include
+    LIBRARIES # TODO
+)

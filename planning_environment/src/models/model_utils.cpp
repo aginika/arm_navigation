@@ -36,6 +36,8 @@
 
 #include <planning_environment/models/model_utils.h>
 #include <geometric_shapes/bodies.h>
+#include <geometric_shapes/body_operations.h>
+#include <tf_conversions/tf_eigen.h>
 #include <planning_environment/util/construct_object.h>
 
 //returns true if the joint_state_map sets all the joints in the state, 
@@ -444,9 +446,9 @@ void planning_environment::setMarkerShapeFromShape(const shapes::Shape *obj, vis
     mk.scale.x = mk.scale.y = mk.scale.z = 0.001;
     {	   
       const shapes::Mesh *mesh = static_cast<const shapes::Mesh*>(obj);
-      double* vertices = new double[mesh->vertexCount * 3];
+      double* vertices = new double[mesh->vertex_count * 3];
       double sx = 0.0, sy = 0.0, sz = 0.0;
-      for(unsigned int i = 0; i < mesh->vertexCount; ++i) {
+      for(unsigned int i = 0; i < mesh->vertex_count; ++i) {
         unsigned int i3 = i * 3;
         vertices[i3] = mesh->vertices[i3];
         vertices[i3 + 1] = mesh->vertices[i3 + 1];
@@ -456,11 +458,11 @@ void planning_environment::setMarkerShapeFromShape(const shapes::Shape *obj, vis
         sz += vertices[i3 + 2];
       }
       // the center of the mesh
-      sx /= (double)mesh->vertexCount;
-      sy /= (double)mesh->vertexCount;
-      sz /= (double)mesh->vertexCount;
+      sx /= (double)mesh->vertex_count;
+      sy /= (double)mesh->vertex_count;
+      sz /= (double)mesh->vertex_count;
       
-      for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+      for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
       {
         unsigned int i3 = i * 3;
 	
@@ -486,7 +488,7 @@ void planning_environment::setMarkerShapeFromShape(const shapes::Shape *obj, vis
       tf::Transform trans;
       tf::poseMsgToTF(mk.pose, trans);
 
-      for (unsigned int j = 0 ; j < mesh->triangleCount; ++j) {
+      for (unsigned int j = 0 ; j < mesh->triangle_count; ++j) {
         unsigned int t1ind = mesh->triangles[3*j];
         unsigned int t2ind = mesh->triangles[3*j + 1];
         unsigned int t3ind = mesh->triangles[3*j + 2];
@@ -587,7 +589,9 @@ void planning_environment::convertAllowedContactSpecificationMsgToAllowedContact
     delete shape;
     tf::Transform trans;
     tf::poseMsgToTF(acs.pose_stamped.pose, trans);
-    bodysp->setPose(trans);
+    Eigen::Affine3d trans_eigen;
+    tf::transformTFToEigen(trans, trans_eigen);
+    bodysp->setPose(trans_eigen);
 
     collision_space::EnvironmentModel::AllowedContact allc;
     allc.bound = bodysp;

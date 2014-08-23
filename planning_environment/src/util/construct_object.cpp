@@ -79,10 +79,10 @@ shapes::Shape* planning_environment::constructObject(const arm_navigation_msgs::
 		    ROS_ERROR("Mesh definition is empty");
 		else
 		{
-		    std::vector<tf::Vector3>    vertices(obj.vertices.size());
+                  std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> >  vertices(obj.vertices.size());
 		    std::vector<unsigned int> triangles(obj.triangles.size());
 		    for (unsigned int i = 0 ; i < obj.vertices.size() ; ++i)
-			vertices[i].setValue(obj.vertices[i].x, obj.vertices[i].y, obj.vertices[i].z);
+                      vertices[i] << obj.vertices[i].x, obj.vertices[i].y, obj.vertices[i].z;
 		    for (unsigned int i = 0 ; i < obj.triangles.size() ; ++i)
 			triangles[i] = obj.triangles[i];
 		    shape = shapes::createMeshFromVertices(vertices, triangles);
@@ -130,13 +130,13 @@ bool planning_environment::constructObjectMsg(const shapes::Shape* shape, arm_na
           obj.type = arm_navigation_msgs::Shape::MESH;
 
           const shapes::Mesh *mesh = static_cast<const shapes::Mesh*>(shape);
-          const unsigned int t3 = mesh->triangleCount * 3;
+          const unsigned int t3 = mesh->triangle_count * 3;
 
-          obj.vertices.resize(mesh->vertexCount);
+          obj.vertices.resize(mesh->vertex_count);
           obj.triangles.resize(t3);
 	
           double sx = 0.0, sy = 0.0, sz = 0.0;
-          for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+          for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
           {
             unsigned int i3 = i * 3;
             obj.vertices[i].x = mesh->vertices[i3];
@@ -147,12 +147,12 @@ bool planning_environment::constructObjectMsg(const shapes::Shape* shape, arm_na
             sz += obj.vertices[i].z;
           }
           // the center of the mesh
-          sx /= (double)mesh->vertexCount;
-          sy /= (double)mesh->vertexCount;
-          sz /= (double)mesh->vertexCount;
+          sx /= (double)mesh->vertex_count;
+          sy /= (double)mesh->vertex_count;
+          sz /= (double)mesh->vertex_count;
 
           // scale the mesh
-          for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+          for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
           {
             // vector from center to the vertex
             double dx = obj.vertices[i].x - sx;
@@ -171,7 +171,7 @@ bool planning_environment::constructObjectMsg(const shapes::Shape* shape, arm_na
             obj.vertices[i].z = sz + ndz;
           }
 
-          //for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+          //for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
           //{
           //    obj.vertices[i].x = mesh->vertices[3 * i    ];
           //    obj.vertices[i].y = mesh->vertices[3 * i + 1];

@@ -39,6 +39,7 @@
 
 #include <geometric_shapes/shapes.h>
 #include <arm_navigation_msgs/Shape.h>
+#include <tf/tf.h>
 
 namespace planning_environment
 {

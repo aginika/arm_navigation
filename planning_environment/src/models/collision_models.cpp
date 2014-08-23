@@ -45,6 +45,7 @@
 #include <boost/foreach.hpp>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
+#include <tf_conversions/tf_eigen.h>
 
 inline static std::string stripTFPrefix(const std::string& s) {
   
@@ -71,7 +72,11 @@ planning_environment::CollisionModels::~CollisionModels(void)
 {
   deleteAllStaticObjects();
   deleteAllAttachedObjects();
-  shapes::deleteShapeVector(collision_map_shapes_);
+  //shapes::deleteShapeVector(collision_map_shapes_);
+  for(unsigned int i = 0; i < collision_map_shapes_.size(); i++) {
+    delete collision_map_shapes_[i];
+  }
+  collision_map_shapes_.clear();
   delete ode_collision_model_;
 }
 
@@ -599,13 +604,17 @@ bool planning_environment::CollisionModels::updateAttachedBodyPosesForLink(const
       bodiesUnlock();
       return false;
     }
-    if(bvit->second->getSize() != att_state->getGlobalCollisionBodyTransforms().size()) {
+    if(bvit->second->getCount() != att_state->getGlobalCollisionBodyTransforms().size()) {
       ROS_WARN_STREAM("State out of sync with attached body vector for attached body " << att_state->getName());
       bodiesUnlock();
       return false;
     }
     for(unsigned int k = 0; k < att_state->getGlobalCollisionBodyTransforms().size(); k++) {
-      bvit->second->setPose(k, att_state->getGlobalCollisionBodyTransforms()[k]);
+      tf::Transform tmp_tf = att_state->getGlobalCollisionBodyTransforms()[k];
+      Eigen::Affine3d global_collision_body_transform;
+      tf::transformTFToEigen(tmp_tf, global_collision_body_transform);
+
+      bvit->second->setPose(k, global_collision_body_transform);
     }
   }
   bodiesUnlock();
@@ -627,7 +636,8 @@ bool planning_environment::CollisionModels::updateAttachedBodyPoses(const planni
 bool planning_environment::CollisionModels::addStaticObject(const arm_navigation_msgs::CollisionObject& obj)
 {
   std::vector<shapes::Shape*> shapes;
-  std::vector<tf::Transform> poses;
+  std::vector<Eigen::Affine3d,  Eigen::aligned_allocator<Eigen::Affine3d> > poses_eigen;
+  std::vector<tf::Transform > poses;
   for(unsigned int i = 0; i < obj.shapes.size(); i++) {
     shapes::Shape *shape = constructObject(obj.shapes[i]);
     if(!shape) {
@@ -638,6 +648,9 @@ bool planning_environment::CollisionModels::addStaticObject(const arm_navigation
     tf::Transform pose;
     tf::poseMsgToTF(obj.poses[i], pose);
     poses.push_back(pose);
+    Eigen::Affine3d pose_eigen;
+    tf::transformTFToEigen(pose, pose_eigen);
+    poses_eigen.push_back(pose_eigen);
   }
   double padding = object_padd_;
   if(obj.padding < 0.0) {
@@ -646,8 +659,9 @@ bool planning_environment::CollisionModels::addStaticObject(const arm_navigation
     padding = obj.padding;
   }
   addStaticObject(obj.id,
-                  shapes, 
+                  shapes,
                   poses,
+                  poses_eigen,
                   padding);
   return true;
 }
@@ -655,14 +669,15 @@ bool planning_environment::CollisionModels::addStaticObject(const arm_navigation
 //note - ownership of shape passes in
 void planning_environment::CollisionModels::addStaticObject(const std::string& name,
                                                             std::vector<shapes::Shape*>& shapes,
-                                                            const std::vector<tf::Transform>& poses,
+                                                            const std::vector<tf::Transform> poses,
+                                                            const std::vector<Eigen::Affine3d,  Eigen::aligned_allocator<Eigen::Affine3d> >& poses_eigen,
                                                             double padding)
 {
   if(ode_collision_model_->hasObject(name)) {
     deleteStaticObject(name);
   }
   bodiesLock();
-  static_object_map_[name] = new bodies::BodyVector(shapes, poses, padding);
+  static_object_map_[name] = new bodies::BodyVector(shapes, poses_eigen, padding);
   ode_collision_model_->lock();
   ode_collision_model_->addObjects(name, shapes, poses);
   ode_collision_model_->unlock();
@@ -716,8 +731,13 @@ void planning_environment::CollisionModels::setCollisionMap(std::vector<shapes::
                                                             bool mask_before_insertion)
 {
   bodiesLock();
-  shapes::deleteShapeVector(collision_map_shapes_);
-  collision_map_shapes_ = shapes::cloneShapeVector(shapes);
+  for(unsigned int i = 0; i < collision_map_shapes_.size(); i++) {
+    delete collision_map_shapes_[i];
+  }
+  collision_map_shapes_.clear();
+  for(int i = 0; i < shapes.size(); i++){
+    collision_map_shapes_.push_back(shapes[i]->clone());
+  }
   collision_map_poses_ = poses;
   std::vector<tf::Transform> masked_poses = poses;
   if(mask_before_insertion) {
@@ -735,7 +755,11 @@ void planning_environment::CollisionModels::setCollisionMap(std::vector<shapes::
 }
 
 void planning_environment::CollisionModels::remaskCollisionMap() {
-  std::vector<shapes::Shape*> shapes = shapes::cloneShapeVector(collision_map_shapes_);
+  std::vector<shapes::Shape*> shapes;
+  for (int i = 0; i < collision_map_shapes_.size(); i++){
+    shapes.push_back(collision_map_shapes_[i]->clone());
+  }
+  // = shapes::cloneShapeVector(collision_map_shapes_);
   std::vector<tf::Transform> masked_poses = collision_map_poses_;
   maskAndDeleteShapeVector(shapes,masked_poses); 
   ode_collision_model_->lock();
@@ -766,7 +790,44 @@ void planning_environment::CollisionModels::maskAndDeleteShapeVector(std::vector
       object_vector.push_back(it2->second);
     }    
   }
-  bodies::maskPosesInsideBodyVectors(poses, object_vector, mask, true);
+
+  //bodies::maskPosesInsideBodyVectors(poses, object_vector, mask, true);
+
+  bool use_padded = true;
+  mask.resize(poses.size(), false);
+  for(unsigned int i = 0; i < poses.size(); i++) {
+    bool inside = false;
+    tf::Vector3 pt = poses[i].getOrigin();
+    Eigen::Vector3d pt_eigen;
+    tf::vectorTFToEigen(pt, pt_eigen);
+    for(unsigned int j = 0; !inside && j < object_vector.size(); j++) {
+      for(unsigned int k = 0;!inside && k < object_vector[j]->getCount(); k++) {
+        const bodies::Body* tmp_body = object_vector[j]->getBody(k);
+
+        bodies::BoundingSphere bounding_sphere;
+        tmp_body->computeBoundingSphere(bounding_sphere);
+        Eigen::Vector3d sphere_center_diff = bounding_sphere.center - pt_eigen;
+        float distance2 = sphere_center_diff.norm();
+        float squared_radius = bounding_sphere.radius * bounding_sphere.radius;
+
+        if(!use_padded) {
+          if(distance2 < squared_radius) {
+            if(tmp_body->containsPoint(pt_eigen)) {
+              inside = true;
+            }
+          }
+        } else {
+          if(distance2 < squared_radius) {
+            if(tmp_body->containsPoint(pt_eigen)) {
+              inside = true;
+            }
+          }
+        }
+      }
+    }
+    mask[i] = !inside;
+  }
+
   std::vector<tf::Transform> ret_poses;
   std::vector<shapes::Shape*> ret_shapes;
   unsigned int num_masked = 0;
@@ -813,7 +874,10 @@ bool planning_environment::CollisionModels::addAttachedObject(const arm_navigati
                         att.touch_links,
                         padding)) {
     ROS_INFO_STREAM("Problem attaching " << obj.id);
-    shapes::deleteShapeVector(shapes);
+    for(unsigned int i = 0; i < shapes.size(); i++) {
+      delete shapes[i];
+    }
+    shapes.clear();
   }
   return true;
 }
@@ -841,8 +905,15 @@ bool planning_environment::CollisionModels::addAttachedObject(const std::string&
     }
   }
 
+  std::vector<Eigen::Affine3d,  Eigen::aligned_allocator<Eigen::Affine3d> > poses_eigen;
+  for (int i = 0; i< poses.size(); i++){
+    Eigen::Affine3d pose_eigen;
+    tf::transformTFToEigen(poses[i], pose_eigen);
+    poses_eigen.push_back(pose_eigen);
+  }
+
   //the poses will be totally incorrect until they are updated with a state
-  link_attached_objects_[link_name][object_name] = new bodies::BodyVector(shapes, poses, padding);  
+  link_attached_objects_[link_name][object_name] = new bodies::BodyVector(shapes, poses_eigen, padding);  
 
   std::vector<std::string> modded_touch_links;
   
@@ -969,7 +1040,7 @@ bool planning_environment::CollisionModels::convertStaticObjectToAttachedObject(
     if(ns[i] == object_name) {
       const collision_space::EnvironmentObjects::NamespaceObjects &no = eo->getObjects(ns[i]);
       for(unsigned int j = 0; j < no.shape.size(); j++) {
-        shapes.push_back(cloneShape(no.shape[j]));
+        shapes.push_back(no.shape[j]->clone());
         poses.push_back(no.shape_pose[j]);
       }
     }
@@ -1032,7 +1103,12 @@ bool planning_environment::CollisionModels::convertAttachedObjectToStaticObject(
     bodiesUnlock();
     return false;
   }
-  std::vector<shapes::Shape*> shapes = shapes::cloneShapeVector(att->getShapes());
+  //  std::vector<shapes::Shape*> shapes = shapes::cloneShapeVector(att->getShapes());
+  std::vector<shapes::Shape*> shapes;
+  for(int i = 0; i< att->getShapes().size(); i++){
+    shapes.push_back(att->getShapes()[i]->clone());
+  }
+  // = shapes::cloneShapeVector(att->getShapes());
   std::vector<tf::Transform> poses;
   for(unsigned int i = 0; i < att->getAttachedBodyFixedTransforms().size(); i++) {
     poses.push_back(link_pose*att->getAttachedBodyFixedTransforms()[i]);
@@ -1299,7 +1375,7 @@ void planning_environment::CollisionModels::getCollisionSpaceCollisionObjects(st
     if(static_object_map_.find(ns[i]) == static_object_map_.end()) {
       ROS_WARN_STREAM("No matching internal object named " << ns[i]);
     } else {
-      o.padding = static_object_map_.find(ns[i])->second->getPadding();
+      o.padding = static_object_map_.find(ns[i])->second->getBody(0)->getPadding();
     }
     omap.push_back(o);
   }
@@ -1338,7 +1414,7 @@ void planning_environment::CollisionModels::getCollisionSpaceAttachedCollisionOb
               link_attached_objects_.find(ao.link_name)->second.end()) {
       ROS_WARN_STREAM("No matching attached objects for link " << ao.link_name << " object " << ao.object.id);
     } else {
-      ao.object.padding = link_attached_objects_.find(ao.link_name)->second.find(ao.object.id)->second->getPadding();
+      ao.object.padding = link_attached_objects_.find(ao.link_name)->second.find(ao.object.id)->second->getBody(0)->getPadding();
     }
     avec.push_back(ao);
   }

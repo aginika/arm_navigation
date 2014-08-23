@@ -37,8 +37,6 @@ else()
   set(IS_ASSIMP3 0) # most likely not
 endif()
 
-
-
 include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${Bullet_INCLUDE_DIRS} ${ODE_INCLUDE_DIRS})
 
 catkin_package(
@@ -50,9 +48,9 @@ catkin_package(
 
 add_library(collision_space src/environment_objects.cpp
 				    src/environment.cpp
-#				    src/environmentODE.cpp
+				    src/environmentODE.cpp
 )
 target_link_libraries(collision_space ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Bullet_LIBRARIES} ${ODE_LIBRARIES})
 
 catkin_add_gtest(test_collision_space test/test_collision_space.cpp)
-target_link_libraries(test_collision_space collision_space ${catkin_LIBRARIES})
+target_link_libraries(test_collision_space collision_space ${catkin_LIBRARIES} ${ODE_LIBRARIES})

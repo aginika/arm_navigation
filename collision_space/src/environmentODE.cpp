@@ -219,7 +219,7 @@ void collision_space::EnvironmentModelODE::createODERobotModel()
   } 
 }
 
-dGeomID collision_space::EnvironmentModelODE::createODEGeom(dSpaceID space, ODEStorage &storage, const shapes::StaticShape *shape)
+dGeomID collision_space::EnvironmentModelODE::createODEGeom(dSpaceID space, ODEStorage &storage, const shapes::Shape *shape)
 {
   dGeomID g = NULL;
   switch (shape->type)
@@ -261,18 +261,18 @@ dGeomID collision_space::EnvironmentModelODE::createODEGeom(dSpaceID space, ODES
   case shapes::MESH:
     {
       const shapes::Mesh *mesh = static_cast<const shapes::Mesh*>(shape);
-      if (mesh->vertexCount > 0 && mesh->triangleCount > 0)
+      if (mesh->vertex_count > 0 && mesh->triangle_count > 0)
       {		
         // copy indices for ODE
-        int icount = mesh->triangleCount * 3;
+        int icount = mesh->triangle_count * 3;
         dTriIndex *indices = new dTriIndex[icount];
         for (int i = 0 ; i < icount ; ++i)
           indices[i] = mesh->triangles[i];
 		
         // copt vertices for ODE
-        double *vertices = new double[mesh->vertexCount* 3];
+        double *vertices = new double[mesh->vertex_count* 3];
         double sx = 0.0, sy = 0.0, sz = 0.0;
-        for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+        for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
         {
           unsigned int i3 = i * 3;
           vertices[i3] = mesh->vertices[i3];
@@ -283,12 +283,12 @@ dGeomID collision_space::EnvironmentModelODE::createODEGeom(dSpaceID space, ODES
           sz += vertices[i3 + 2];
         }
         // the center of the mesh
-        sx /= (double)mesh->vertexCount;
-        sy /= (double)mesh->vertexCount;
-        sz /= (double)mesh->vertexCount;
+        sx /= (double)mesh->vertex_count;
+        sy /= (double)mesh->vertex_count;
+        sz /= (double)mesh->vertex_count;
 
         // scale the mesh
-        for (unsigned int i = 0 ; i < mesh->vertexCount ; ++i)
+        for (unsigned int i = 0 ; i < mesh->vertex_count ; ++i)
         {
           unsigned int i3 = i * 3;
 		    
@@ -312,13 +312,13 @@ dGeomID collision_space::EnvironmentModelODE::createODEGeom(dSpaceID space, ODES
         }
 		
         dTriMeshDataID data = dGeomTriMeshDataCreate();
-        dGeomTriMeshDataBuildDouble(data, vertices, sizeof(double) * 3, mesh->vertexCount, indices, icount, sizeof(dTriIndex) * 3);
+        dGeomTriMeshDataBuildDouble(data, vertices, sizeof(double) * 3, mesh->vertex_count, indices, icount, sizeof(dTriIndex) * 3);
         g = dCreateTriMesh(space, data, NULL, NULL, NULL);
         ODEStorage::Element& e = storage.meshes[g];
         e.vertices = vertices;
         e.indices = indices;
         e.data = data;
-        e.n_vertices = mesh->vertexCount;
+        e.n_vertices = mesh->vertex_count;
         e.n_indices = icount;
       }
     }
@@ -870,6 +870,7 @@ void nearCallbackFn(void *data, dGeomID o1, dGeomID o2)
       ROS_DEBUG_STREAM("Body quat 2 " << quat2[1] << " " << quat2[2] << " " << quat2[3] << " " << quat2[0]);
 
       tf::Vector3 pos(contactGeoms[i].pos[0], contactGeoms[i].pos[1], contactGeoms[i].pos[2]);
+      Eigen::Vector3d pos_eigen(contactGeoms[i].pos[0], contactGeoms[i].pos[1], contactGeoms[i].pos[2]);
       
       //figure out whether the contact is allowed
       //allowed contacts only allowed with objects for now
@@ -885,7 +886,7 @@ void nearCallbackFn(void *data, dGeomID o1, dGeomID o2)
             
             const std::vector<EnvironmentModel::AllowedContact>& av = it2->second;
             for(unsigned int j = 0; j < av.size(); j++) {
-              if(av[j].bound->containsPoint(pos)) {
+              if(av[j].bound->containsPoint(pos_eigen)) {
                 if(av[j].depth >= fabs(contactGeoms[i].depth)) {
                   allowed = true;
                   ROS_DEBUG_STREAM("Contact allowed by allowed collision region");
@@ -1299,7 +1300,7 @@ void collision_space::EnvironmentModelODE::addObject(const std::string &ns, shap
   objects_->addObject(ns, shape, pose);
 }
 
-void collision_space::EnvironmentModelODE::addObject(const std::string &ns, shapes::StaticShape* shape)
+void collision_space::EnvironmentModelODE::addObject(const std::string &ns, shapes::Shape* shape)
 {   
   std::map<std::string, CollisionNamespace*>::iterator it = coll_namespaces_.find(ns);
   CollisionNamespace* cn = NULL;    
@@ -1452,13 +1453,13 @@ collision_space::EnvironmentModel* collision_space::EnvironmentModelODE::clone(v
       int idx = shapePtrs[dGeomGetData(it->second->geoms[i])];
       if (idx < 0) // static geom
       {
-        shapes::StaticShape *newShape = shapes::cloneShape(ns.static_shape[-idx - 1]);
+        shapes::Shape *newShape = ns.static_shape[-idx - 1]->clone();
         dGeomSetData(newGeom, reinterpret_cast<void*>(newShape));
         env->objects_->addObject(it->first, newShape);
       }
       else // movable geom
       {
-        shapes::Shape *newShape = shapes::cloneShape(ns.shape[idx]);
+        shapes::Shape *newShape = ns.shape[idx]->clone();
         dGeomSetData(newGeom, reinterpret_cast<void*>(newShape));
         env->objects_->addObject(it->first, newShape, ns.shape_pose[idx]);
       }
@@ -1473,13 +1474,13 @@ collision_space::EnvironmentModel* collision_space::EnvironmentModelODE::clone(v
       int idx = shapePtrs[dGeomGetData(geoms[i])];
       if (idx < 0) // static geom
       {
-        shapes::StaticShape *newShape = shapes::cloneShape(ns.static_shape[-idx - 1]);
+        shapes::Shape *newShape = ns.static_shape[-idx - 1]->clone();
         dGeomSetData(newGeom, reinterpret_cast<void*>(newShape));
         env->objects_->addObject(it->first, newShape);
       }
       else // movable geom
       {
-        shapes::Shape *newShape = shapes::cloneShape(ns.shape[idx]);
+        shapes::Shape *newShape = ns.shape[idx]->clone();
         dGeomSetData(newGeom, reinterpret_cast<void*>(newShape));
         env->objects_->addObject(it->first, newShape, ns.shape_pose[idx]);
       }

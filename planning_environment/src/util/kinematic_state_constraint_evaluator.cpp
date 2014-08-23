@@ -37,6 +37,7 @@
 #include "planning_environment/util/kinematic_state_constraint_evaluator.h"
 #include <geometric_shapes/shape_operations.h>
 #include <tf/transform_datatypes.h>
+#include <tf_conversions/tf_eigen.h>
 #include <angles/angles.h>
 #include <cassert>
 
@@ -138,7 +139,7 @@ bool planning_environment::createConstraintRegionFromMsg(const arm_navigation_ms
   }
   else if(constraint_region_shape.type == arm_navigation_msgs::Shape::MESH)
   {
-    std::vector<tf::Vector3> vertices;
+    std::vector<Eigen::Vector3d,  Eigen::aligned_allocator<Eigen::Vector3d> > vertices;
     std::vector<unsigned int> triangles; 
     for(unsigned int i=0; i < constraint_region_shape.triangles.size(); i++)
     {
@@ -148,7 +149,9 @@ bool planning_environment::createConstraintRegionFromMsg(const arm_navigation_ms
     {
       tf::Vector3 tmp;
       tf::pointMsgToTF(constraint_region_shape.vertices[i],tmp);
-      vertices.push_back(tmp);
+      Eigen::Vector3d point;
+      tf::vectorTFToEigen(tmp, point);
+      vertices.push_back(point);
     }
     shapes::Mesh *shape = shapes::createMeshFromVertices(vertices,triangles);
     body.reset(new bodies::ConvexMesh(shape));    
@@ -160,7 +163,9 @@ bool planning_environment::createConstraintRegionFromMsg(const arm_navigation_ms
   }
   tf::Transform pose_tf;
   tf::poseMsgToTF(constraint_region_pose,pose_tf);
-  body->setPose(pose_tf);
+  Eigen::Affine3d pose_tf_eigen;
+  tf::transformTFToEigen(pose_tf, pose_tf_eigen);
+  body->setPose(pose_tf_eigen);
   return true;
 }
 
@@ -219,7 +224,10 @@ bool planning_environment::PositionConstraintEvaluator::decide(const planning_mo
     return false;
   }
 
-  bool result =  m_constraint_region->containsPoint(link_state->getGlobalLinkTransform()(m_offset),false);
+  tf::Vector3 tmp_tf = link_state->getGlobalLinkTransform()(m_offset);
+  Eigen::Vector3d global_link_tf_eigen;
+  tf::vectorTFToEigen(tmp_tf, global_link_tf_eigen);
+  bool result =  m_constraint_region->containsPoint(global_link_tf_eigen,false);
   if(!result)
   {
     ROS_DEBUG("Position constraint violated : desired:: %f, %f, %f, current:: %f, %f, %f, tolerance: %f, %f, %f",m_x,m_y,m_z,

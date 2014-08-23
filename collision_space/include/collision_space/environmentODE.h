@@ -94,7 +94,7 @@ public:
   virtual bool hasObject(const std::string& ns) const;
 		
   /** \brief Add a static collision object to the map. The user releases ownership of the passed object. Memory allocated for the shape is freed by the collision environment. */
-  virtual void addObject(const std::string &ns, shapes::StaticShape *shape);
+  virtual void addObject(const std::string &ns, shapes::Shape *shape);
 
   /** \brief Add a collision object to the map. The user releases ownership of the passed object. Memory allocated for the shape is freed by the collision environment. */
   virtual void addObject(const std::string &ns, shapes::Shape* shape, const tf::Transform &pose);
@@ -446,7 +446,7 @@ protected:
   dGeomID copyGeom(dSpaceID space, ODEStorage &storage, dGeomID geom, ODEStorage &sourceStorage) const;
   void createODERobotModel();	
   dGeomID createODEGeom(dSpaceID space, ODEStorage &storage, const shapes::Shape *shape, double scale, double padding);
-  dGeomID createODEGeom(dSpaceID space, ODEStorage &storage, const shapes::StaticShape *shape);
+  dGeomID createODEGeom(dSpaceID space, ODEStorage &storage, const shapes::Shape *shape);
   void updateGeom(dGeomID geom, const tf::Transform &pose) const;	
 
   void addAttachedBody(LinkGeom* lg, const planning_models::KinematicModel::AttachedBodyModel* attm,
