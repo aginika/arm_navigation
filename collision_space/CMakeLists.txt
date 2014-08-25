@@ -40,7 +40,7 @@ endif()
 include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${Bullet_INCLUDE_DIRS} ${ODE_INCLUDE_DIRS})
 
 catkin_package(
-    DEPENDS pkg-config bullet libode-dev
+    DEPENDS pkg-config bullet libode-dev ode
     CATKIN_DEPENDS rosconsole planning_models geometric_shapes
     INCLUDE_DIRS include
     LIBRARIES collision_space
@@ -50,7 +50,7 @@ add_library(collision_space src/environment_objects.cpp
 				    src/environment.cpp
 				    src/environmentODE.cpp
 )
-target_link_libraries(collision_space ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Bullet_LIBRARIES} ${ODE_LIBRARIES})
+target_link_libraries(collision_space ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Bullet_LIBRARIES} ${ODE_LIBRARIES} /usr/lib/libode.so)
 
 catkin_add_gtest(test_collision_space test/test_collision_space.cpp)
 target_link_libraries(test_collision_space collision_space ${catkin_LIBRARIES} ${ODE_LIBRARIES})
